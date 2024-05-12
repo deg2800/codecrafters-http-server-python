@@ -14,15 +14,26 @@ def main():
     server_socket = socket.create_server((HOST, PORT), reuse_port=True)
     print(f"Server is running on {HOST}:{PORT}...")
 
-    connection, client_address = server_socket.accept()
-    print(f"Connected by {client_address}")
+    while True:
+        connection, client_address = server_socket.accept()
+        print(f"Connected by {client_address}")
 
-    try:
-        send_http_response(connection, 200, "OK")
-        print("Response sent to the client.")
-    finally:
-        connection.close()
-        print("Connection closed.")
+        try:
+            request = connection.recv(1024).decode('utf-8')
+            print("Received request:")
+            print(request)
+
+            request_line = request.split('\r\n')[0]
+            path = request_line.split(' ')[1]
+
+            if path == '/':
+                send_http_response(connection, 200, "OK")
+            else:
+                send_http_response(connection, 404, "Not Found")
+
+        finally:
+            connection.close()
+            print("Connection closed.")
 
 if __name__ == "__main__":
     main()
