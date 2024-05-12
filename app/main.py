@@ -1,18 +1,24 @@
 import socket
 
-def main():
-    print("Logs from your program will appear here!")
+HOST = 'localhost'
+PORT = 4221
 
-    server_socket = socket.create_server(("localhost", 4221), reuse_port=True)
-    print("Server is running on port 4221...")
+def send_http_response(connection, status_code, reason_phrase):
+    """Send an HTTP response to the client."""
+    response = f"HTTP/1.1 {status_code} {reason_phrase}\r\n\r\n"
+    connection.sendall(response.encode('utf-8'))
+
+def main():
+    print("Server is starting...")
+
+    server_socket = socket.create_server((HOST, PORT), reuse_port=True)
+    print(f"Server is running on {HOST}:{PORT}...")
 
     connection, client_address = server_socket.accept()
     print(f"Connected by {client_address}")
 
     try:
-        http_response = "HTTP/1.1 200 OK\r\n\r\n"
-        
-        connection.sendall(http_response.encode('utf-8'))
+        send_http_response(connection, 200, "OK")
         print("Response sent to the client.")
     finally:
         connection.close()
