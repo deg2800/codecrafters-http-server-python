@@ -1,13 +1,20 @@
 import socket
 import os
 import argparse
+import re
+
+# Constants
+HOST = 'localhost'
+PORT = 4221
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="HTTP Server with directory argument.")
-    parser.add_argument("--directory", required=True, help="Directory to serve files from.")
+    parser = argparse.ArgumentParser(description="HTTP Server that can serve files and handle specific endpoints.")
+    parser.add_argument("--directory", default=os.getcwd(), help="Directory to serve files from. Defaults to current working directory.")
     return parser.parse_args()
 
-def send_http_response(connection, status_code, reason_phrase, body=b'', content_type='application/octet-stream'):
+def send_http_response(connection, status_code, reason_phrase, body='', content_type='text/plain'):
+    if isinstance(body, str):
+        body = body.encode('utf-8')  # Ensure the body is in bytes
     content_length = len(body)
     headers = (
         f"Content-Type: {content_type}\r\n"
@@ -16,7 +23,7 @@ def send_http_response(connection, status_code, reason_phrase, body=b'', content
     response = f"HTTP/1.1 {status_code} {reason_phrase}\r\n{headers}\r\n"
     connection.sendall(response.encode('utf-8') + body)
 
-def handle_request(connection, base_directory):
+def handle_request(connection, args):
     request = connection.recv(1024).decode('utf-8')
     print("Received request:")
     print(request)
@@ -24,31 +31,39 @@ def handle_request(connection, base_directory):
     request_line = request.split('\r\n')[0]
     method, path, _ = request_line.split()
 
-    if path.startswith('/files/'):
+    if path == '/':
+        send_http_response(connection, 200, "OK")
+    elif path.startswith('/echo/'):
+        echo_str = path[6:]  # Extracts the string after '/echo/'
+        send_http_response(connection, 200, "OK", body=echo_str)
+    elif path == '/user-agent':
+        user_agent = next((line.split(": ")[1] for line in request.split('\r\n') if line.startswith("User-Agent: ")), "Unknown")
+        send_http_response(connection, 200, "OK", body=user_agent)
+    elif path.startswith('/files/'):
         filename = path[7:]  # Extract the filename after '/files/'
-        filepath = os.path.join(base_directory, filename)
+        filepath = os.path.join(args.directory, filename)
         if os.path.isfile(filepath):
             with open(filepath, 'rb') as file:
                 file_data = file.read()
-            send_http_response(connection, 200, "OK", body=file_data)
+            send_http_response(connection, 200, "OK", body=file_data, content_type='application/octet-stream')
         else:
-            send_http_response(connection, 404, "Not Found", body=b'', content_type='text/plain')
+            send_http_response(connection, 404, "Not Found", content_type='text/plain')
     else:
-        send_http_response(connection, 404, "Not Found", body=b'', content_type='text/plain')
+        send_http_response(connection, 404, "Not Found")
 
 def main():
     args = parse_args()
     print(f"Server will serve files from {args.directory}")
 
-    server_socket = socket.create_server(('localhost', 4221), reuse_port=True)
-    print("Server is running on localhost:4221...")
+    server_socket = socket.create_server((HOST, PORT), reuse_port=True)
+    print(f"Server is running on {HOST}:{PORT}...")
 
     while True:
         connection, client_address = server_socket.accept()
         print(f"Connected by {client_address}")
 
         try:
-            handle_request(connection, args.directory)
+            handle_request(connection, args)
         finally:
             connection.close()
             print("Connection closed.")
