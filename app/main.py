@@ -1,18 +1,22 @@
 import socket
 import os
 import argparse
+import zlib  # Import zlib for gzip compression
 
+# Constants
 HOST = 'localhost'
 PORT = 4221
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="HTTP Server that can serve files, handle specific endpoints, accept file uploads, and support content encoding.")
+    parser = argparse.ArgumentParser(description="HTTP Server that can serve files, handle specific endpoints, accept file uploads, and support gzip compression.")
     parser.add_argument("--directory", default=os.getcwd(), help="Directory to serve files from and save uploads to. Defaults to current working directory.")
     return parser.parse_args()
 
 def send_http_response(connection, status_code, reason_phrase, body='', content_type='text/plain', content_encoding=None):
     if isinstance(body, str):
-        body = body.encode('utf-8')
+        body = body.encode('utf-8')  # Ensure the body is in bytes
+    if content_encoding == 'gzip':
+        body = zlib.compress(body, level=9)  # Compress the body if gzip encoding is requested
     content_length = len(body)
     headers = [
         f"Content-Type: {content_type}",
@@ -20,10 +24,10 @@ def send_http_response(connection, status_code, reason_phrase, body='', content_
     ]
     if content_encoding:
         headers.append(f"Content-Encoding: {content_encoding}")
-    
+
     header_str = '\r\n'.join(headers)
-    response = f"HTTP/1.1 {status_code} {reason_phrase}\r\n{header_str}\r\n\r\n{body.decode('utf-8')}"
-    connection.sendall(response.encode('utf-8'))
+    response = f"HTTP/1.1 {status_code} {reason_phrase}\r\n{header_str}\r\n\r\n"
+    connection.sendall(response.encode('utf-8') + body)  # Send the headers and body together
 
 def handle_request(connection, args):
     request = connection.recv(4096).decode('utf-8')
@@ -35,13 +39,14 @@ def handle_request(connection, args):
     method, path, _ = request_line.split()
     accept_encoding = next((line.split(": ")[1] for line in headers.split('\r\n') if line.startswith("Accept-Encoding: ")), '')
 
+    # Split and strip the encoding header to handle multiple encodings
     supported_encodings = accept_encoding.split(',')
     supported_encodings = [encoding.strip() for encoding in supported_encodings]
 
     if path == '/':
         send_http_response(connection, 200, "OK")
     elif path.startswith('/echo/'):
-        echo_str = path[6:]
+        echo_str = path[6:]  # Extracts the string after '/echo/'
         if 'gzip' in supported_encodings:
             send_http_response(connection, 200, "OK", body=echo_str, content_type='text/plain', content_encoding='gzip')
         else:
