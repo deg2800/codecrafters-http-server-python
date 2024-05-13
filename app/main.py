@@ -39,6 +39,9 @@ def handle_request(connection, args):
 
     if path == '/':
         send_http_response(connection, 200, "OK")
+    elif path == '/user-agent':
+        user_agent = next((line.split(": ")[1] for line in headers.split('\r\n') if line.startswith("User-Agent: ")), "Unknown")
+        send_http_response(connection, 200, "OK", body=user_agent)
     elif path.startswith('/echo/'):
         echo_str = path[6:]  # Extracts the string after '/echo/'
         if 'gzip' in accept_encoding:
