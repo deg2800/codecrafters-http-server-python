@@ -1,17 +1,13 @@
 import socket
+import re
 
-# Constants
 HOST = 'localhost'
 PORT = 4221
 
 def send_http_response(connection, status_code, reason_phrase, body='', content_type='text/plain'):
-    """Send an HTTP response to the client."""
     body_bytes = body.encode('utf-8')
     content_length = len(body_bytes)
-    headers = (
-        f"Content-Type: {content_type}\r\n"
-        f"Content-Length: {content_length}\r\n"
-    )
+    headers = f"Content-Type: {content_type}\r\nContent-Length: {content_length}\r\n"
     response = f"HTTP/1.1 {status_code} {reason_phrase}\r\n{headers}\r\n{body}"
     connection.sendall(response.encode('utf-8'))
 
@@ -38,6 +34,9 @@ def main():
             elif path.startswith('/echo/'):
                 echo_str = path[6:]
                 send_http_response(connection, 200, "OK", body=echo_str)
+            elif path == '/user-agent':
+                user_agent = next((line.split(": ")[1] for line in request.split('\r\n') if line.startswith("User-Agent: ")), "Unknown")
+                send_http_response(connection, 200, "OK", body=user_agent)
             else:
                 send_http_response(connection, 404, "Not Found")
 
