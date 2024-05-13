@@ -28,40 +28,25 @@ def send_http_response(connection, status_code, reason_phrase, body='', content_
     connection.sendall(response.encode('utf-8'))
 
 def handle_request(connection, args):
-    request = connection.recv(4096).decode('utf-8')
+    request = connection.recv(4096).decode('utf-8')  # Increased buffer size for potential file data
     print("Received request:")
     print(request)
 
     headers, body = request.split('\r\n\r\n', 1)
     request_line = headers.split('\r\n')[0]
     method, path, _ = request_line.split()
-    accept_encoding = next((line.split(": ")[1] for line in headers.split('\r\n') if line.startswith("Accept-Encoding: ")), None)
+    print(f"Method: {method}, Path: {path}")  # Debugging output for method and path
 
     if path == '/':
         send_http_response(connection, 200, "OK")
     elif path.startswith('/echo/'):
         echo_str = path[6:]  # Extracts the string after '/echo/'
-        if 'gzip' in accept_encoding:
-            send_http_response(connection, 200, "OK", body=echo_str, content_type='text/plain', content_encoding='gzip')
-        else:
-            send_http_response(connection, 200, "OK", body=echo_str, content_type='text/plain')
-    elif path.startswith('/files/') and method == 'GET':
-        filename = path[7:]
-        filepath = os.path.join(args.directory, filename)
-        if os.path.isfile(filepath):
-            with open(filepath, 'rb') as file:
-                file_data = file.read()
-            send_http_response(connection, 200, "OK", body=file_data, content_type='application/octet-stream')
-        else:
-            send_http_response(connection, 404, "Not Found", content_type='text/plain')
-    elif path.startswith('/files/') and method == 'POST':
-        filename = path[7:]
-        filepath = os.path.join(args.directory, filename)
-        with open(filepath, 'wb') as file:
-            file.write(body.encode('utf-8'))
-        send_http_response(connection, 201, "Created")
+        send_http_response(connection, 200, "OK", body=echo_str)
+    elif path == '/user-agent':
+        user_agent = next((line.split(": ")[1] for line in headers.split('\r\n') if line.startswith("User-Agent: ")), "Unknown")
+        send_http_response(connection, 200, "OK", body=user_agent)
     else:
-        send_http_response(connection, 404, "Not Found")
+        send_http_response(connection, 404, "Not Found")  # Ensure this matches the expected paths
 
 def main():
     args = parse_args()
