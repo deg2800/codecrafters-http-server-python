@@ -1,9 +1,9 @@
 import socket
 import os
 import argparse
-import zlib  # Import zlib for gzip compression
+import gzip
+import io
 
-# Constants
 HOST = 'localhost'
 PORT = 4221
 
@@ -14,9 +14,12 @@ def parse_args():
 
 def send_http_response(connection, status_code, reason_phrase, body='', content_type='text/plain', content_encoding=None):
     if isinstance(body, str):
-        body = body.encode('utf-8')  # Ensure the body is in bytes
+        body = body.encode('utf-8')
     if content_encoding == 'gzip':
-        body = zlib.compress(body, level=9)  # Compress the body if gzip encoding is requested
+        buffer = io.BytesIO()
+        with gzip.GzipFile(fileobj=buffer, mode='wb') as gzip_file:
+            gzip_file.write(body)
+        body = buffer.getvalue()
     content_length = len(body)
     headers = [
         f"Content-Type: {content_type}",
@@ -27,7 +30,7 @@ def send_http_response(connection, status_code, reason_phrase, body='', content_
 
     header_str = '\r\n'.join(headers)
     response = f"HTTP/1.1 {status_code} {reason_phrase}\r\n{header_str}\r\n\r\n"
-    connection.sendall(response.encode('utf-8') + body)  # Send the headers and body together
+    connection.sendall(response.encode('utf-8') + body)
 
 def handle_request(connection, args):
     request = connection.recv(4096).decode('utf-8')
@@ -39,14 +42,13 @@ def handle_request(connection, args):
     method, path, _ = request_line.split()
     accept_encoding = next((line.split(": ")[1] for line in headers.split('\r\n') if line.startswith("Accept-Encoding: ")), '')
 
-    # Split and strip the encoding header to handle multiple encodings
     supported_encodings = accept_encoding.split(',')
     supported_encodings = [encoding.strip() for encoding in supported_encodings]
 
     if path == '/':
         send_http_response(connection, 200, "OK")
     elif path.startswith('/echo/'):
-        echo_str = path[6:]  # Extracts the string after '/echo/'
+        echo_str = path[6:]
         if 'gzip' in supported_encodings:
             send_http_response(connection, 200, "OK", body=echo_str, content_type='text/plain', content_encoding='gzip')
         else:
